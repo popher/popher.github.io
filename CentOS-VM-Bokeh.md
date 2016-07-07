@@ -80,11 +80,9 @@ sudo vi /etc/hosts
 ```
 Modify this file to read:
 
-```
-127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4 server1.example.com server1
+> 127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4 server1.example.com server1
 ::1         localhost localhost.localdomain localhost6 localhost6.localdomain6
 192.168.56.101 server1.example.com server1
-```
 
 Obviously change the second full IP address to whatever your guest (centos) is.
 In your host (Windows), [modify the hosts file to reflect the same](http://www.howtogeek.com/howto/27350/beginner-geek-how-to-edit-your-hosts-file/).
@@ -165,6 +163,10 @@ python setup.py install
 [^github]:Yes you should probably use git to grab this, but this works too...
 
 ## Set up Nginx
+Tip: Make a symbolic link to the root html directory from your home directory:
+```
+ln -s /usr/share/nginx/html ~/html
+```
 I used a mash up of instructions from [Bokeh](http://bokeh.pydata.org/en/0.12.0/docs/user_guide/server.html) and the previous nginx set up instructions. This resulted in some conflicting information. 
 
 First step, SSL.
@@ -400,6 +402,17 @@ That command consists of a number of aspects:
 
 In your web browser, now navigate to `https://server1.example.com/apps/`
 You should be redirected to `https://server1.example.com/apps/crossfilter` (where `crossfilter` is the name of the app you launched)
+
+If this doesnt work (you get a blank grey page), it is because there are some static bokeh resources the server can't locate. 
+The quick and dirty fix is just to copy them to the root server directory:
+```
+sudo cp -r ~/miniconda2/pkgs/bokeh-0.12.0-py27_0/lib/python2.7/site-packages/bokeh/server/static /usr/share/nginx/html/
+```
+This is not ideal and may be related to how I set up the nginx configuration...
+
+
+----------
+Note, you may well get SELinux issues with bokeh server. The quick and dirty fix is to disable SElinux, but you can address the issues by following the AVC denial prompts (click troubleshooting).
 
 ##Next steps...
 Two main things:
