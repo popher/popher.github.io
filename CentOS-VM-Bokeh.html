@@ -1,0 +1,466 @@
+<h1 id="bokeh-server-virtualbox-instructions">Bokeh Server - VirtualBox Instructions</h1>
+
+<p>This tutorial will set up a basic web server in a virtual machine to run the awesome <strong>Bokeh</strong><a href="#fn:bokeh" id="fnref:bokeh" title="See footnote" class="footnote">1</a> server. </p>
+
+<p>The end server will be a CentOS 7 LNMP<a href="#fn:lnmp" id="fnref:lnmp" title="See footnote" class="footnote">2</a> virtual machine with the ability to serve HTML, PHP, and Python applets. </p>
+
+<p>Values (names, numbers) I include are subjective, and may not be best for your set up.</p>
+
+<p><div class="toc">
+<ul>
+<li><a href="#bokeh-server-virtualbox-instructions">Bokeh Server - VirtualBox Instructions</a><ul>
+<li><a href="#setting-up-a-virtual-machine">Setting up a Virtual Machine</a></li>
+<li><a href="#setting-up-centos">Setting up CentOS </a><ul>
+<li><a href="#hosts-and-ip-addresses">Hosts and IP addresses</a></li>
+<li><a href="#installing-nginx">Installing Nginx</a></li>
+<li><a href="#install-mariadb-and-php">Install MariaDB and PHP</a></li>
+</ul>
+</li>
+<li><a href="#install-python-27">Install Python (2.7)</a></li>
+<li><a href="#set-up-nginx">Set up Nginx</a><ul>
+<li><a href="#ssl-support">SSL Support</a></li>
+<li><a href="#nginx-conf">Nginx Conf</a></li>
+</ul>
+</li>
+<li><a href="#table-of-contents">Table of contents</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</p>
+
+<hr>
+
+
+
+<h2 id="setting-up-a-virtual-machine">Setting up a Virtual Machine</h2>
+
+<p>These instructions are for <a href="https://www.virtualbox.org/">VirtualBox</a>, but presumably would be somewhat applicable to other system. The host operating system is Windows 10, but that does not matter.</p>
+
+<ol>
+<li>Download and install <a href="https://www.virtualbox.org/wiki/Downloads">VirtualBox</a></li>
+<li>Download a <a href="https://www.centos.org/download/">CentOS 7 ISO</a><a href="#fn:centos" id="fnref:centos" title="See footnote" class="footnote">3</a> </li>
+<li>In VirtualBox, create a new machine. <br>
+<ol><li>Name - CentOS7Server</li>
+<li>Type: Linux</li>
+<li>Version Red-Hat (64-bit)</li></ol></li>
+<li>Give the machine sufficient RAM (e.g. 8GB if you have 32GB).</li>
+<li>Create a new hard disk (e.g. dynamically allocated 16GB, but you can go larger).</li>
+<li>Once created, right click - settings: <br>
+<ol><li>Network - Adapter 1 - Enable - NAT</li>
+<li>Network - Adaptor 2 - Enable - Host-Only Adapter<a href="#fn:networking" id="fnref:networking" title="See footnote" class="footnote">4</a></li></ol></li>
+<li>Start</li>
+<li>Install CentOS…</li>
+</ol>
+
+<hr>
+
+
+
+<h2 id="setting-up-centos">Setting up CentOS </h2>
+
+<p>CentOS installation is fairly trivial. </p>
+
+<p>I opted for the Server with GUI option, your choice. At this stage you may also wish to add things like the Development Tools group, etc. Anything can be added later if needed.</p>
+
+<p>Also, change the hostname during installation (it can be fixed later if need be).  <br>
+I use <code>server1.example.com</code> - just make sure your host and guest later have their hosts files fixed.</p>
+
+<p>Once CentOS is up and running, do the fairly standard<a href="#fn:sudo" id="fnref:sudo" title="See footnote" class="footnote">5</a>:</p>
+
+
+
+<pre class="prettyprint"><code class=" hljs bash">    <span class="hljs-built_in">sudo</span> yum update</code></pre>
+
+<p>After rebooting, install the virtualbox guest additions to get a better experience. Reboot again to check it’s all working fine.</p>
+
+<p>You might also want to install some other packages at this point, including jpeg support for Pillow.</p>
+
+
+
+<pre class="prettyprint"><code class=" hljs lasso">sudo yum install libtiff<span class="hljs-attribute">-devel</span> libjpeg<span class="hljs-attribute">-devel</span> libzip<span class="hljs-attribute">-devel</span> freetype<span class="hljs-attribute">-devel</span> lcms2<span class="hljs-attribute">-devel</span> libwebp<span class="hljs-attribute">-devel</span> tcl<span class="hljs-attribute">-devel</span> tk<span class="hljs-attribute">-devel</span></code></pre>
+
+<p>At this point you can start to set up the server specific software. Most of LNMP instructions come from <a href="https://www.digitalocean.com/community/tutorials/how-to-install-linux-nginx-mysql-php-lemp-stack-on-centos-7">here</a>.</p>
+
+<h3 id="hosts-and-ip-addresses">Hosts and IP addresses</h3>
+
+<p>In a terminal check the ip address of your host only adaptor:</p>
+
+
+
+<pre class="prettyprint"><code class=" hljs livecodeserver">ip <span class="hljs-operator">a</span></code></pre>
+
+<p>Check the output for an IP address. It will be something like <br>
+<code>192.168.56.101</code> <br>
+The final two blocks of numbers may vary, but not much. This is the IP address of your guest (CentOS) which your host (Windows) can later communicate with. It’s a local-only IP address (192.168.x.x), so no one else can see this from the wider web unless you forward ports explicitly to allow it.</p>
+
+<p>In your guest (CentOS), edit the hosts file to reflect this:</p>
+
+
+
+<pre class="prettyprint"><code class=" hljs bash"><span class="hljs-built_in">sudo</span> vi /etc/hosts</code></pre>
+
+<p>Modify this file to read:</p>
+
+<blockquote>
+  <p>127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4 server1.example.com server1 <br>
+  ::1         localhost localhost.localdomain localhost6 localhost6.localdomain6 <br>
+  192.168.56.101 server1.example.com server1</p>
+</blockquote>
+
+<p>Obviously change the second full IP address to whatever your guest (centos) is. <br>
+In your host (Windows), <a href="http://www.howtogeek.com/howto/27350/beginner-geek-how-to-edit-your-hosts-file/">modify the hosts file to reflect the same</a>.</p>
+
+
+
+<h3 id="installing-nginx">Installing Nginx</h3>
+
+<p>These instructions from <a href="https://www.nginx.com/resources/wiki/start/topics/tutorials/install/">here</a>  and <a href="https://www.digitalocean.com/community/tutorials/how-to-install-nginx-on-centos-7">here</a> also.</p>
+
+<p>Add the Nginx repo</p>
+
+
+
+<pre class="prettyprint"><code class=" hljs avrasm">sudo vi /etc/yum<span class="hljs-preprocessor">.repos</span><span class="hljs-preprocessor">.d</span>/nginx<span class="hljs-preprocessor">.repo</span></code></pre>
+
+<p>Insert:</p>
+
+
+
+<pre class="prettyprint"><code class=" hljs ini"><span class="hljs-title">[nginx]</span>
+<span class="hljs-setting">name=<span class="hljs-value">nginx repo</span></span>
+<span class="hljs-setting">baseurl=<span class="hljs-value">http://nginx.org/packages/centos/$releasever/$basearch/</span></span>
+<span class="hljs-setting">gpgcheck=<span class="hljs-value"><span class="hljs-number">0</span></span></span>
+<span class="hljs-setting">enabled=<span class="hljs-value"><span class="hljs-number">1</span></span></span></code></pre>
+
+<p>Save and close.</p>
+
+<p>Then install and start nginx:</p>
+
+
+
+<pre class="prettyprint"><code class=" hljs bash"><span class="hljs-built_in">sudo</span> yum install nginx
+<span class="hljs-built_in">sudo</span> systemctl start nginx
+<span class="hljs-built_in">sudo</span> systemctl enable nginx</code></pre>
+
+<p>And you can check if this has worked by going to your web browser in your guest to <br>
+<code>http://127.0.0.1</code>  <br>
+and also/obviously, <br>
+<code>http://server1.example.com</code> </p>
+
+<p>You will need to modify the firewall rules on your Guest before you can see this from your host:</p>
+
+
+
+<pre class="prettyprint"><code class=" hljs brainfuck"><span class="hljs-comment">sudo</span> <span class="hljs-comment">firewall</span><span class="hljs-literal">-</span><span class="hljs-comment">cmd</span> <span class="hljs-literal">-</span><span class="hljs-literal">-</span><span class="hljs-comment">permanent</span> <span class="hljs-literal">-</span><span class="hljs-literal">-</span><span class="hljs-comment">zone=public</span> <span class="hljs-literal">-</span><span class="hljs-literal">-</span><span class="hljs-comment">add</span><span class="hljs-literal">-</span><span class="hljs-comment">service=http</span> 
+<span class="hljs-comment">sudo</span> <span class="hljs-comment">firewall</span><span class="hljs-literal">-</span><span class="hljs-comment">cmd</span> <span class="hljs-literal">-</span><span class="hljs-literal">-</span><span class="hljs-comment">permanent</span> <span class="hljs-literal">-</span><span class="hljs-literal">-</span><span class="hljs-comment">zone=public</span> <span class="hljs-literal">-</span><span class="hljs-literal">-</span><span class="hljs-comment">add</span><span class="hljs-literal">-</span><span class="hljs-comment">service=https</span>
+<span class="hljs-comment">sudo</span> <span class="hljs-comment">firewall</span><span class="hljs-literal">-</span><span class="hljs-comment">cmd</span> <span class="hljs-literal">-</span><span class="hljs-literal">-</span><span class="hljs-comment">reload</span></code></pre>
+
+<p>This code above allows HTTP (port 80) and HTTPS (port 443) through the firewall. <br>
+Once you have made those changes, you should be able to access your website from the host PC too.</p>
+
+
+
+<h3 id="install-mariadb-and-php">Install MariaDB and PHP</h3>
+
+<p>These steps are optional. Follow the instructions <a href="https://www.digitalocean.com/community/tutorials/how-to-install-linux-nginx-mysql-php-lemp-stack-on-centos-7">here</a>.</p>
+
+
+
+<h2 id="install-python-27">Install Python (2.7)</h2>
+
+<p>Unfortunately, I haven’t got this working on Python 3 yet - <a href="https://pythonclock.org/">just under four years left…</a> </p>
+
+<p>Grab the latest version of Miniconda from <a href="http://conda.pydata.org/miniconda.html">here</a>.  <br>
+I like Miniconda/anaconda, but if you want to do it a different way thats your call. </p>
+
+<p>Download e.g. </p>
+
+
+
+<pre class="prettyprint"><code class=" hljs lasso">wget https:<span class="hljs-comment">//repo.continuum.io/miniconda/Miniconda2-latest-Linux-x86_64.sh</span>
+chmod <span class="hljs-subst">+</span>x Miniconda2<span class="hljs-attribute">-latest</span><span class="hljs-attribute">-Linux</span><span class="hljs-attribute">-x86_64</span><span class="hljs-built_in">.</span>sh
+bash Miniconda2<span class="hljs-attribute">-latest</span><span class="hljs-attribute">-Linux</span><span class="hljs-attribute">-x86_64</span><span class="hljs-built_in">.</span>sh</code></pre>
+
+<p>I recommend you allow it to add the miniconda2 path to your bash profile. </p>
+
+<p>At this point you will want to update and install a number of python packages:</p>
+
+
+
+<pre class="prettyprint"><code class=" hljs cmake">conda update python
+conda <span class="hljs-keyword">install</span> numpy numba scipy matplotlib pandas PyTables
+conda <span class="hljs-keyword">install</span> bokeh</code></pre>
+
+<p>I also love the <a href="https://github.com/bokeh/datashader">DataShader</a> project. <br>
+Due to some packages on Conda being a little outdated, it’s best if you grab datashader from github and install it through that<a href="#fn:github" id="fnref:github" title="See footnote" class="footnote">6</a>:</p>
+
+
+
+<pre class="prettyprint"><code class=" hljs avrasm">wget https://github<span class="hljs-preprocessor">.com</span>/bokeh/datashader/archive/master<span class="hljs-preprocessor">.zip</span>
+unzip master<span class="hljs-preprocessor">.zip</span>
+cd datashader
+conda install -c bokeh --file requirements<span class="hljs-preprocessor">.txt</span>
+python setup<span class="hljs-preprocessor">.py</span> install</code></pre>
+
+
+
+<h2 id="set-up-nginx">Set up Nginx</h2>
+
+<p>I used a mash up of instructions from <a href="http://bokeh.pydata.org/en/0.12.0/docs/user_guide/server.html">Bokeh</a> and the previous nginx set up instructions. This resulted in some conflicting information. </p>
+
+<p>First step, SSL.</p>
+
+
+
+<h3 id="ssl-support">SSL Support</h3>
+
+<p>This is based on instructions <a href="https://www.digitalocean.com/community/tutorials/how-to-create-an-ssl-certificate-on-nginx-for-ubuntu-14-04">here</a> </p>
+
+
+
+<pre class="prettyprint"><code class=" hljs lasso">sudo mkdir /etc/nginx/ssl
+sudo openssl req <span class="hljs-attribute">-x509</span> <span class="hljs-attribute">-nodes</span> <span class="hljs-attribute">-days</span> <span class="hljs-number">365</span> <span class="hljs-attribute">-newkey</span> rsa:<span class="hljs-number">2048</span> <span class="hljs-attribute">-keyout</span> /etc/nginx/ssl/nginx<span class="hljs-built_in">.</span>key <span class="hljs-attribute">-out</span> etc/nginx/ssl/nginx<span class="hljs-built_in">.</span>crt</code></pre>
+
+<p>This creates a couple of self-signed certificates. Follow the prompt instructions, making sure to at least enter the <code>Common Name (e.g. server FQDN or YOUR name)</code> - i.e. <code>server1.example.com</code></p>
+
+
+
+<h3 id="nginx-conf">Nginx Conf</h3>
+
+<p>The main configuration files are located at: <br>
+<code>/etc/nginx/nginx.conf</code>  <br>
+and  <br>
+<code>/etc/nginx/conf.d/default.conf</code></p>
+
+<p>Make a backup of the default.conf file</p>
+
+
+
+<pre class="prettyprint"><code class=" hljs avrasm">sudo <span class="hljs-keyword">cp</span> /etc/nginx/conf<span class="hljs-preprocessor">.d</span>/default<span class="hljs-preprocessor">.conf</span> /etc/nginx/conf<span class="hljs-preprocessor">.d</span>/default<span class="hljs-preprocessor">.conf</span><span class="hljs-preprocessor">.old</span></code></pre>
+
+<p>And then edit the file:</p>
+
+
+
+<pre class="prettyprint"><code class=" hljs haskell"><span class="hljs-title">sudo</span> vi /etc/nginx/conf.d/<span class="hljs-default"><span class="hljs-keyword">default</span>.conf</span></code></pre>
+
+<p>The exact layout for this file will depend what you want to serve.  <br>
+The example below is based on PHP being installed, and also wanting to redirect all HTTP requests to HTTPS (i.e. secure only).</p>
+
+
+
+<pre class="prettyprint"><code class=" hljs perl">server {
+    <span class="hljs-keyword">listen</span>      <span class="hljs-number">80</span>;
+    server_name server1.example.com;
+    <span class="hljs-keyword">return</span>      <span class="hljs-number">301</span> https:<span class="hljs-regexp">//</span><span class="hljs-variable">$server_name</span><span class="hljs-variable">$request_uri</span>;
+}
+
+server {
+    <span class="hljs-keyword">listen</span>      <span class="hljs-number">443</span> default_server;
+    server_name server1.example.com;
+
+    <span class="hljs-comment"># add Strict-Transport-Security to prevent man in the middle attacks</span>
+    add_header Strict-Transport-Security <span class="hljs-string">"max-age=31536000"</span>;
+
+    ssl on;
+
+    <span class="hljs-comment"># SSL installation details will vary by platform</span>
+    ssl_certificate /etc/nginx/ssl/nginx.crt;
+    ssl_certificate_key /etc/nginx/ssl/nginx.key;
+
+    <span class="hljs-comment"># enables all versions of TLS, but not SSLv2 or v3 which are deprecated.</span>
+    ssl_protocols TLSv1 TLSv1.<span class="hljs-number">1</span> TLSv1.<span class="hljs-number">2</span>;
+
+    <span class="hljs-comment"># disables all weak ciphers</span>
+    ssl_ciphers <span class="hljs-string">"ECDHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-SHA384:ECDHE-RSA-AES128-SHA256:ECDHE-RSA-AES256-SHA:ECDHE-RSA-AES128-SHA:DHE-RSA-AES256-SHA256:DHE-RSA-AES128-SHA256:DHE-RSA-AES256-SHA:DHE-RSA-AES128-SHA:ECDHE-RSA-DES-CBC3-SHA:EDH-RSA-DES-CBC3-SHA:AES256-GCM-SHA384:AES128-GCM-SHA256:AES256-SHA256:AES128-SHA256:AES256-SHA:AES128-SHA:DES-CBC3-SHA:HIGH:!aNULL:!eNULL:!EXPORT:!DES:!MD5:!PSK:!RC4"</span>;
+
+    ssl_prefer_server_ciphers on;
+
+    access_log  /var/<span class="hljs-keyword">log</span>/nginx/bokeh.access.<span class="hljs-keyword">log</span>;
+    error_log   /var/<span class="hljs-keyword">log</span>/nginx/bokeh.error.<span class="hljs-keyword">log</span>  debug;
+
+    root   /usr/share/nginx/html;
+    <span class="hljs-keyword">index</span> <span class="hljs-keyword">index</span>.php <span class="hljs-keyword">index</span>.html <span class="hljs-keyword">index</span>.htm;
+
+    location / {
+        try_files <span class="hljs-variable">$uri</span> <span class="hljs-variable">$uri</span>/ =<span class="hljs-number">404</span>;
+    }
+    error_page <span class="hljs-number">404</span> /<span class="hljs-number">404</span>.html;
+    error_page <span class="hljs-number">500</span> <span class="hljs-number">502</span> <span class="hljs-number">503</span> <span class="hljs-number">504</span> /<span class="hljs-number">50</span><span class="hljs-keyword">x</span>.html;
+
+    location = <span class="hljs-regexp">/50x.html {
+        root /usr</span><span class="hljs-regexp">/share/nginx</span><span class="hljs-regexp">/html;
+    }
+
+    location ~ \.php$ {
+        try_files $uri =404;
+        fastcgi_pass unix:/var</span><span class="hljs-regexp">/run/php</span>-fpm/php-fpm.sock;
+        fastcgi_index <span class="hljs-keyword">index</span>.php;
+        fastcgi_param SCRIPT_FILENAME <span class="hljs-variable">$document_root</span><span class="hljs-variable">$fastcgi_script_name</span>;
+        include fastcgi_params;
+    }
+
+    location /apps/ {
+        proxy_pass http:<span class="hljs-regexp">//</span><span class="hljs-number">127.0</span>.<span class="hljs-number">0</span>.<span class="hljs-number">1</span>:<span class="hljs-number">5100</span>;
+        proxy_set_header Upgrade <span class="hljs-variable">$http_upgrade</span>;
+        proxy_set_header Connection <span class="hljs-string">"upgrade"</span>;
+        proxy_http_version <span class="hljs-number">1.1</span>;
+        proxy_set_header X-Forwarded-Proto <span class="hljs-variable">$scheme</span>;
+        proxy_set_header X-Forwarded-For <span class="hljs-variable">$proxy_add_x_forwarded_for</span>;
+        proxy_set_header Host <span class="hljs-variable">$host</span>:<span class="hljs-variable">$server_port</span>;
+        proxy_buffering off;
+    }
+
+    location /apps/static {
+        alias /usr/share/nginx/html/static;
+    }
+
+}</code></pre>
+
+<hr>
+
+<p>This is quite a long file, so I’ll break it down:</p>
+
+<pre class="prettyprint"><code class=" hljs perl">server {
+    <span class="hljs-keyword">listen</span>      <span class="hljs-number">80</span>;
+    server_name server1.example.com;
+    <span class="hljs-keyword">return</span>      <span class="hljs-number">301</span> https:<span class="hljs-regexp">//</span><span class="hljs-variable">$server_name</span><span class="hljs-variable">$request_uri</span>;
+}</code></pre>
+
+<p>This section above <strong>listens</strong> on port <strong>80</strong> for the server name provided (<code>server1.example.com</code>) and <a href="https://en.wikipedia.org/wiki/HTTP_301">redirects</a> to https.</p>
+
+<hr>
+
+<p>The next section (abridged):</p>
+
+<pre class="prettyprint"><code class=" hljs avrasm">server {
+    listen      <span class="hljs-number">443</span> default_server<span class="hljs-comment">;</span>
+    server_name server1<span class="hljs-preprocessor">.example</span><span class="hljs-preprocessor">.com</span><span class="hljs-comment">;</span>
+
+    <span class="hljs-preprocessor"># add Strict-Transport-Security to prevent man in the middle attacks</span>
+    add_header Strict-Transport-Security <span class="hljs-string">"max-age=31536000"</span><span class="hljs-comment">;</span>
+
+    ssl on<span class="hljs-comment">;</span>
+
+    <span class="hljs-preprocessor"># SSL installation details will vary by platform</span>
+    ssl_certificate /etc/nginx/ssl/nginx<span class="hljs-preprocessor">.crt</span><span class="hljs-comment">;</span>
+    ssl_certificate_key /etc/nginx/ssl/nginx<span class="hljs-preprocessor">.key</span><span class="hljs-comment">;</span>
+
+
+    ssl_prefer_server_ciphers on<span class="hljs-comment">;</span></code></pre>
+
+<p>This tells the server to listen on 443 (HTTPS), much like before.  <br>
+It enables SSL and tells Nginx where to find the keys we created earlier. It also sets a few rules for better security. </p>
+
+<hr>
+
+<p>The next section:</p>
+
+<pre class="prettyprint"><code class=" hljs perl">    root   /usr/share/nginx/html;
+    <span class="hljs-keyword">index</span> <span class="hljs-keyword">index</span>.php <span class="hljs-keyword">index</span>.html <span class="hljs-keyword">index</span>.htm;
+
+    location / {
+        try_files <span class="hljs-variable">$uri</span> <span class="hljs-variable">$uri</span>/ =<span class="hljs-number">404</span>;
+    }
+    error_page <span class="hljs-number">404</span> /<span class="hljs-number">404</span>.html;
+    error_page <span class="hljs-number">500</span> <span class="hljs-number">502</span> <span class="hljs-number">503</span> <span class="hljs-number">504</span> /<span class="hljs-number">50</span><span class="hljs-keyword">x</span>.html;
+
+    location = <span class="hljs-regexp">/50x.html {
+        root /usr</span><span class="hljs-regexp">/share/nginx</span><span class="hljs-regexp">/html;
+    }
+
+    location ~ \.php$ {
+        try_files $uri =404;
+        fastcgi_pass unix:/var</span><span class="hljs-regexp">/run/php</span>-fpm/php-fpm.sock;
+        fastcgi_index <span class="hljs-keyword">index</span>.php;
+        fastcgi_param SCRIPT_FILENAME <span class="hljs-variable">$document_root</span><span class="hljs-variable">$fastcgi_script_name</span>;
+        include fastcgi_params;
+    }</code></pre>
+
+<p>This defines the root of the webserver - i.e. where our files actually are. This is important for the static files… <br>
+It also instructs about 404 (etc) error pages, and also how to handle PHP requests (only relevant if you have installed and set up PHP).</p>
+
+<hr>
+
+<p>This final section</p>
+
+<pre class="prettyprint"><code class=" hljs bash">    location /apps/ {
+        proxy_pass http://<span class="hljs-number">127.0</span>.<span class="hljs-number">0.1</span>:<span class="hljs-number">5100</span>;
+        proxy_<span class="hljs-keyword">set</span>_header Upgrade <span class="hljs-variable">$http_upgrade</span>;
+        proxy_<span class="hljs-keyword">set</span>_header Connection <span class="hljs-string">"upgrade"</span>;
+        proxy_http_version <span class="hljs-number">1.1</span>;
+        proxy_<span class="hljs-keyword">set</span>_header X-Forwarded-Proto <span class="hljs-variable">$scheme</span>;
+        proxy_<span class="hljs-keyword">set</span>_header X-Forwarded-For <span class="hljs-variable">$proxy_add_x_forwarded_for</span>;
+        proxy_<span class="hljs-keyword">set</span>_header Host <span class="hljs-variable">$host</span>:<span class="hljs-variable">$server_port</span>;
+        proxy_buffering off;
+    }
+
+    location /apps/static {
+        alias /usr/share/nginx/html/static;
+    }</code></pre>
+
+<p>This makes Bokeh Server actually work with Nginx. The first bit essentially says that any requests to <code>https://server1.example.com/apps/</code> get sent to whatever is listening at <code>http://127.0.0.1:5100</code> <br>
+Bokeh will (later) be serving apps to 127.0.0.1:5100, and this ties it together. </p>
+
+<p>There is an additional section which directs requests to <code>/apps/static</code> to <code>/usr/share/nginx/html/static</code>. I’m not 100% if this is required.</p>
+
+<hr>
+
+<p>Whenever you make changes to the nginx configuration files, you should restart the service:</p>
+
+
+
+<pre class="prettyprint"><code class=" hljs bash"><span class="hljs-built_in">sudo</span> service nginx restart</code></pre>
+
+<p>You can now do a (rudimental) test if that configuration is working properly. </p>
+
+<ol>
+<li>Go to <code>http://server1.example.com</code> in your web browser. It should load the default nginx page, but after redirecting you to <code>https://server1.example.com</code>, and, browser depending, have warned you about a self-signed certificate. </li>
+<li>Go to a non-existing page, e.g. <code>https://server1.example.com/filenothere</code>. You should get an nginx 404 page.</li>
+<li>Go to the bokeh serve page: <code>http://server1.example.com/apps</code>. This should return a different error page reading, “An error occurred.” This is OK, it is because we aren’t yet serving any bokeh apps!</li>
+</ol>
+
+<p>These should do the same in your guest and host web browsers, too.</p>
+
+
+
+<h2 id="bokeh-server">Bokeh Server</h2>
+
+<p>The next step is to download some example files! <br>
+Grab the whole bokeh set from github: (delete the old master.zip file from your downloads first)</p>
+
+<pre class="prettyprint"><code class=" hljs avrasm">wget https://github<span class="hljs-preprocessor">.com</span>/bokeh/bokeh/archive/master<span class="hljs-preprocessor">.zip</span>
+unzip master
+cd bokeh-master/examples/app</code></pre>
+
+<p>Now it’s just a simple single line to serve any one app:</p>
+
+
+
+<pre class="prettyprint"><code class=" hljs brainfuck"><span class="hljs-comment">bokeh</span> <span class="hljs-comment">serve</span> <span class="hljs-comment">crossfilter</span> <span class="hljs-literal">-</span><span class="hljs-literal">-</span><span class="hljs-comment">port</span> <span class="hljs-comment">5100</span> <span class="hljs-literal">-</span><span class="hljs-literal">-</span><span class="hljs-comment">host</span> <span class="hljs-comment">server1</span><span class="hljs-string">.</span><span class="hljs-comment">example</span><span class="hljs-string">.</span><span class="hljs-comment">com:443</span> <span class="hljs-literal">-</span><span class="hljs-literal">-</span><span class="hljs-comment">use</span><span class="hljs-literal">-</span><span class="hljs-comment">xheaders</span> <span class="hljs-literal">-</span><span class="hljs-literal">-</span><span class="hljs-comment">prefix=/apps</span> <span class="hljs-literal">-</span><span class="hljs-literal">-</span><span class="hljs-comment">allow</span><span class="hljs-literal">-</span><span class="hljs-comment">websocket</span><span class="hljs-literal">-</span><span class="hljs-comment">origin=server1</span><span class="hljs-string">.</span><span class="hljs-comment">example</span><span class="hljs-string">.</span><span class="hljs-comment">com</span></code></pre>
+
+<p>That command consists of a number of aspects: <br>
+<code>bokeh serve</code> is the initial command  <br>
+<code>crossfilter</code> is the name of the app we wish to serve. <br>
+<code>--port 5100</code> specifies the port to serve on (see the nginx configuration) <br>
+<code>--host server1.example.com:443</code> specifies the requesting (incoming) port and host <br>
+<code>--use-xheaders</code> is justified in the <a href="http://bokeh.pydata.org/en/0.12.0/docs/user_guide/server.html">original docs.</a> <br>
+<code>--prefix=/apps</code> tells bokeh to ignore the prefix of “/apps/” (else it returns 404s) <br>
+<code>--allow-websocket-origin=server1.example.com</code> makes it work (I dont get this)</p>
+
+<p>In your web browser, now navigate to <code>https://server1.example.com/apps/</code> <br>
+You should be redirected to <code>https://server1.example.com/apps/crossfilter</code> (where <code>crossfilter</code> is the name of the app you launched)</p>
+
+
+
+<h2 id="next-steps">Next steps…</h2>
+
+<p>Two main things: <br>
+1. Serve your own app <br>
+2. Serve multiple apps</p>
+
+<p>For the first point, get coding! </p>
+
+<p>For the second one, I refer to the <a href="https://demo.bokehplots.com/">demo bokeh site</a>. Fortunately, the guys at Bokeh have set up a deploy script for it: <a href="https://github.com/bokeh/demo.bokehplots.com">here.</a>  <br>
+That script relies on <a href="https://saltstack.com/">saltstack</a> &amp; is based on <a href="https://aws.amazon.com/ec2/">Amazon EC2</a> web services. I had a quick play with it, but it’s another layer of complexity.</p><div class="footnotes"><hr><ol><li id="fn:bokeh">“Bokeh is a Python interactive visualization library that targets modern web browsers for presentation.” <a href="http://bokeh.pydata.org/en/latest/">Bokeh</a>  <a href="#fnref:bokeh" title="Return to article" class="reversefootnote">↩</a></li><li id="fn:lnmp">Linux Nginx MySQL(mariaDB) PHP(Python) i.e. <a href="https://en.wikipedia.org/wiki/LAMP_%28software_bundle%29">LAMP stack</a>  <a href="#fnref:lnmp" title="Return to article" class="reversefootnote">↩</a></li><li id="fn:centos">Whilst I prefer CentOS 7, there is no reason you couldn’t go for another linux distribution like Ubuntu. <a href="#fnref:centos" title="Return to article" class="reversefootnote">↩</a></li><li id="fn:networking">This set up (one for NAT, one for Host-Only) is useful if you want to set the machine up for local testing within the guest and the host, but not for allowing the web server to serve the wider internet.  <a href="#fnref:networking" title="Return to article" class="reversefootnote">↩</a></li><li id="fn:sudo">You can run all the code as a normal user with sudo permissions. <a href="#fnref:sudo" title="Return to article" class="reversefootnote">↩</a></li><li id="fn:github">Yes you should probably use git to grab this, but this works too… <a href="#fnref:github" title="Return to article" class="reversefootnote">↩</a></li></ol></div>

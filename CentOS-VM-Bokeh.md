@@ -80,9 +80,11 @@ sudo vi /etc/hosts
 ```
 Modify this file to read:
 
-> 127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4 server1.example.com server1
+```
+127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4 server1.example.com server1
 ::1         localhost localhost.localdomain localhost6 localhost6.localdomain6
 192.168.56.101 server1.example.com server1
+```
 
 Obviously change the second full IP address to whatever your guest (centos) is.
 In your host (Windows), [modify the hosts file to reflect the same](http://www.howtogeek.com/howto/27350/beginner-geek-how-to-edit-your-hosts-file/).
